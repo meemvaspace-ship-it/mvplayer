@@ -1,58 +1,122 @@
-import { Video, Playlist, Booking } from "@/types/video";
-
-const VIDEOS_KEY = "mv-videos";
-const PLAYLISTS_KEY = "mv-playlists";
-const BOOKINGS_KEY = "mv-bookings";
-
-function get<T>(key: string, fallback: T): T {
-  try {
-    const d = localStorage.getItem(key);
-    return d ? JSON.parse(d) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function set(key: string, data: unknown) {
-  localStorage.setItem(key, JSON.stringify(data));
-}
+import { supabase } from "@/integrations/supabase/client";
 
 export const store = {
-  getVideos: (): Video[] => get(VIDEOS_KEY, []),
-  saveVideos: (v: Video[]) => set(VIDEOS_KEY, v),
-  addVideo: (v: Video) => {
-    const all = store.getVideos();
-    all.push(v);
-    store.saveVideos(all);
-  },
-  deleteVideo: (id: string) => {
-    store.saveVideos(store.getVideos().filter((v) => v.id !== id));
-  },
-
-  getPlaylists: (): Playlist[] => get(PLAYLISTS_KEY, []),
-  savePlaylists: (p: Playlist[]) => set(PLAYLISTS_KEY, p),
-  addPlaylist: (p: Playlist) => {
-    const all = store.getPlaylists();
-    all.push(p);
-    store.savePlaylists(all);
-  },
-  deletePlaylist: (id: string) => {
-    store.savePlaylists(store.getPlaylists().filter((p) => p.id !== id));
+  // Videos
+  getVideos: async () => {
+    const { data, error } = await supabase.from("videos").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data || []).map((v: any) => ({
+      id: v.id,
+      name: v.name,
+      coverImage: v.cover_image_url,
+      videoUrl: v.video_url,
+      playlist: v.playlist,
+      category: v.category,
+      downloadPrice: v.download_price,
+      watchPrice: v.watch_price,
+      downloadCode: v.download_code,
+      watchCode: v.watch_code,
+      createdAt: v.created_at,
+    }));
   },
 
-  getBookings: (): Booking[] => get(BOOKINGS_KEY, []),
-  saveBookings: (b: Booking[]) => set(BOOKINGS_KEY, b),
-  addBooking: (b: Booking) => {
-    const all = store.getBookings();
-    all.push(b);
-    store.saveBookings(all);
+  addVideo: async (v: {
+    name: string;
+    coverImage: string;
+    videoUrl: string;
+    playlist: string;
+    category: string;
+    downloadPrice: string;
+    watchPrice: string;
+    downloadCode: string;
+    watchCode: string;
+  }) => {
+    const { error } = await supabase.from("videos").insert({
+      name: v.name,
+      cover_image_url: v.coverImage,
+      video_url: v.videoUrl,
+      playlist: v.playlist,
+      category: v.category,
+      download_price: v.downloadPrice,
+      watch_price: v.watchPrice,
+      download_code: v.downloadCode,
+      watch_code: v.watchCode,
+    });
+    if (error) throw error;
   },
-  markNotified: (id: string) => {
-    const all = store.getBookings();
-    const idx = all.findIndex((b) => b.id === id);
-    if (idx >= 0) {
-      all[idx].notified = true;
-      store.saveBookings(all);
-    }
+
+  deleteVideo: async (id: string) => {
+    const { error } = await supabase.from("videos").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  // Playlists
+  getPlaylists: async () => {
+    const { data, error } = await supabase.from("playlists").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      createdAt: p.created_at,
+    }));
+  },
+
+  addPlaylist: async (name: string) => {
+    const { error } = await supabase.from("playlists").insert({ name });
+    if (error) throw error;
+  },
+
+  deletePlaylist: async (id: string) => {
+    const { error } = await supabase.from("playlists").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  // Bookings
+  getBookings: async () => {
+    const { data, error } = await supabase.from("bookings").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data || []).map((b: any) => ({
+      id: b.id,
+      videoId: b.video_id,
+      videoName: b.video_name,
+      type: b.type,
+      name: b.name,
+      email: b.email,
+      place: b.place,
+      createdAt: b.created_at,
+      notified: b.notified,
+    }));
+  },
+
+  addBooking: async (b: {
+    videoId: string;
+    videoName: string;
+    type: "watch" | "download";
+    name: string;
+    email: string;
+    place: string;
+  }) => {
+    const { error } = await supabase.from("bookings").insert({
+      video_id: b.videoId,
+      video_name: b.videoName,
+      type: b.type,
+      name: b.name,
+      email: b.email,
+      place: b.place,
+    });
+    if (error) throw error;
+  },
+
+  markNotified: async (id: string) => {
+    const { error } = await supabase.from("bookings").update({ notified: true }).eq("id", id);
+    if (error) throw error;
+  },
+
+  // Storage helpers
+  uploadFile: async (bucket: string, path: string, file: File) => {
+    const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    return data.publicUrl;
   },
 };

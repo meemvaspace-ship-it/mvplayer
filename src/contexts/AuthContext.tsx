@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface User {
   id: string;
@@ -11,33 +14,57 @@ interface AuthContextType {
   user: User | null;
   login: () => void;
   logout: () => void;
+  loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, login: () => {}, logout: () => {} });
+const AuthContext = createContext<AuthContextType>({ user: null, login: () => {}, logout: () => {}, loading: true });
+
+function mapUser(u: SupabaseUser): User {
+  const meta = u.user_metadata || {};
+  return {
+    id: u.id,
+    name: meta.full_name || meta.name || u.email?.split("@")[0] || "User",
+    email: u.email || "",
+    avatar: meta.avatar_url || meta.picture,
+  };
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem("mv-user");
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = () => {
-    // Placeholder - will be replaced with Google OAuth via Lovable Cloud
-    const mockUser: User = {
-      id: crypto.randomUUID(),
-      name: "Demo User",
-      email: "demo@example.com",
-    };
-    setUser(mockUser);
-    localStorage.setItem("mv-user", JSON.stringify(mockUser));
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(mapUser(session.user));
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(mapUser(session.user));
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async () => {
+    await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem("mv-user");
   };
 
-  return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);

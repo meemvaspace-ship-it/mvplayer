@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Trash2, Plus, Upload, Eye, Mail } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Upload, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,14 +10,16 @@ import { toast } from "sonner";
 
 const AdminPanel = () => {
   const navigate = useNavigate();
-  const [videos, setVideos] = useState(store.getVideos());
-  const [playlists, setPlaylists] = useState(store.getPlaylists());
-  const [bookings, setBookings] = useState(store.getBookings());
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
 
   // Upload form state
   const [name, setName] = useState("");
-  const [coverImage, setCoverImage] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoFileName, setVideoFileName] = useState("");
   const [playlist, setPlaylist] = useState("");
   const [category, setCategory] = useState("");
   const [downloadPrice, setDownloadPrice] = useState("");
@@ -25,66 +27,122 @@ const AdminPanel = () => {
   const [downloadCode, setDownloadCode] = useState("");
   const [watchCode, setWatchCode] = useState("");
   const [newPlaylist, setNewPlaylist] = useState("");
+  const [uploading, setUploading] = useState(false);
 
-  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const loadData = async () => {
+    try {
+      const [v, p, b] = await Promise.all([store.getVideos(), store.getPlaylists(), store.getBookings()]);
+      setVideos(v);
+      setPlaylists(p);
+      setBookings(b);
+    } catch (e) {
+      console.error("Failed to load admin data", e);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCoverFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => setCoverImage(reader.result as string);
+      reader.onloadend = () => setCoverPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
-  const handleUploadVideo = () => {
-    if (!name.trim() || !videoUrl.trim()) {
-      toast.error("Name and video URL are required");
+  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setVideoFile(file);
+      setVideoFileName(file.name);
+    }
+  };
+
+  const handleUploadVideo = async () => {
+    if (!name.trim() || !videoFile) {
+      toast.error("Name and video file are required");
       return;
     }
-    const video: Video = {
-      id: crypto.randomUUID(),
-      name: name.trim(),
-      coverImage,
-      videoUrl: videoUrl.trim(),
-      playlist,
-      category: category.trim(),
-      downloadPrice: downloadPrice || "0",
-      watchPrice: watchPrice || "0",
-      downloadCode: downloadCode.trim(),
-      watchCode: watchCode.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    store.addVideo(video);
-    setVideos(store.getVideos());
-    setName(""); setCoverImage(""); setVideoUrl(""); setPlaylist(""); setCategory("");
-    setDownloadPrice(""); setWatchPrice(""); setDownloadCode(""); setWatchCode("");
-    toast.success("Video uploaded!");
+
+    setUploading(true);
+    try {
+      const videoPath = `${Date.now()}-${videoFile.name}`;
+      const videoUrl = await store.uploadFile("videos", videoPath, videoFile);
+
+      let coverImageUrl = "";
+      if (coverFile) {
+        const coverPath = `${Date.now()}-${coverFile.name}`;
+        coverImageUrl = await store.uploadFile("covers", coverPath, coverFile);
+      }
+
+      await store.addVideo({
+        name: name.trim(),
+        coverImage: coverImageUrl,
+        videoUrl,
+        playlist,
+        category: category.trim(),
+        downloadPrice: downloadPrice || "0",
+        watchPrice: watchPrice || "0",
+        downloadCode: downloadCode.trim(),
+        watchCode: watchCode.trim(),
+      });
+
+      await loadData();
+      setName(""); setCoverFile(null); setCoverPreview(""); setVideoFile(null); setVideoFileName("");
+      setPlaylist(""); setCategory(""); setDownloadPrice(""); setWatchPrice("");
+      setDownloadCode(""); setWatchCode("");
+      toast.success("Video uploaded!");
+    } catch (e: any) {
+      toast.error("Upload failed: " + (e.message || "Unknown error"));
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleDeleteVideo = (id: string) => {
-    store.deleteVideo(id);
-    setVideos(store.getVideos());
-    toast.success("Video deleted");
+  const handleDeleteVideo = async (id: string) => {
+    try {
+      await store.deleteVideo(id);
+      await loadData();
+      toast.success("Video deleted");
+    } catch {
+      toast.error("Failed to delete video");
+    }
   };
 
-  const handleAddPlaylist = () => {
+  const handleAddPlaylist = async () => {
     if (!newPlaylist.trim()) return;
-    const p: Playlist = { id: crypto.randomUUID(), name: newPlaylist.trim(), createdAt: new Date().toISOString() };
-    store.addPlaylist(p);
-    setPlaylists(store.getPlaylists());
-    setNewPlaylist("");
-    toast.success("Playlist created");
+    try {
+      await store.addPlaylist(newPlaylist.trim());
+      await loadData();
+      setNewPlaylist("");
+      toast.success("Playlist created");
+    } catch {
+      toast.error("Failed to create playlist");
+    }
   };
 
-  const handleDeletePlaylist = (id: string) => {
-    store.deletePlaylist(id);
-    setPlaylists(store.getPlaylists());
-    toast.success("Playlist deleted");
+  const handleDeletePlaylist = async (id: string) => {
+    try {
+      await store.deletePlaylist(id);
+      await loadData();
+      toast.success("Playlist deleted");
+    } catch {
+      toast.error("Failed to delete playlist");
+    }
   };
 
-  const handleNotify = (b: Booking) => {
-    store.markNotified(b.id);
-    setBookings(store.getBookings());
-    toast.success(`Code info notification marked for ${b.email}`);
+  const handleNotify = async (b: Booking) => {
+    try {
+      await store.markNotified(b.id);
+      await loadData();
+      toast.success(`Code info notification marked for ${b.email}`);
+    } catch {
+      toast.error("Failed to update booking");
+    }
   };
 
   return (
@@ -105,15 +163,18 @@ const AdminPanel = () => {
           </TabsList>
 
           <TabsContent value="upload" className="space-y-6 mt-4">
-            {/* Upload form */}
             <div className="bg-card p-4 rounded-lg border border-border space-y-3">
               <h2 className="font-semibold text-foreground">Upload New Video</h2>
               <Input placeholder="Video Name" value={name} onChange={(e) => setName(e.target.value)} />
-              <Input placeholder="Video URL (direct link)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} />
+              <div>
+                <label className="text-sm text-muted-foreground">Video File</label>
+                <Input type="file" accept="video/*" onChange={handleVideoSelect} />
+                {videoFileName && <p className="text-xs text-primary mt-1">Selected: {videoFileName}</p>}
+              </div>
               <div>
                 <label className="text-sm text-muted-foreground">Cover Image</label>
-                <Input type="file" accept="image/*" onChange={handleCoverUpload} />
-                {coverImage && <img src={coverImage} alt="Preview" className="h-24 mt-2 rounded object-cover" />}
+                <Input type="file" accept="image/*" onChange={handleCoverSelect} />
+                {coverPreview && <img src={coverPreview} alt="Preview" className="h-24 mt-2 rounded object-cover" />}
               </div>
               <select
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
@@ -134,12 +195,11 @@ const AdminPanel = () => {
                 <Input placeholder="Watch Code" value={watchCode} onChange={(e) => setWatchCode(e.target.value)} />
                 <Input placeholder="Download Code" value={downloadCode} onChange={(e) => setDownloadCode(e.target.value)} />
               </div>
-              <Button onClick={handleUploadVideo} className="w-full gap-2">
-                <Upload className="h-4 w-4" /> Upload Video
+              <Button onClick={handleUploadVideo} className="w-full gap-2" disabled={uploading}>
+                <Upload className="h-4 w-4" /> {uploading ? "Uploading..." : "Upload Video"}
               </Button>
             </div>
 
-            {/* Video list */}
             <div className="space-y-2">
               <h2 className="font-semibold text-foreground">Uploaded Videos ({videos.length})</h2>
               {videos.map((v) => (
