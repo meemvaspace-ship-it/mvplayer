@@ -10,9 +10,10 @@ interface Props {
   video: Video | null;
   type: "watch" | "download";
   onSuccess: () => void;
+  onBookCode: () => void;
 }
 
-const CodeDialog = ({ open, onOpenChange, video, type, onSuccess }: Props) => {
+const CodeDialog = ({ open, onOpenChange, video, type, onSuccess, onBookCode }: Props) => {
   const [code, setCode] = useState("");
   const [error, setError] = useState(false);
 
@@ -47,6 +48,9 @@ const CodeDialog = ({ open, onOpenChange, video, type, onSuccess }: Props) => {
           />
           {error && <p className="text-sm text-destructive">Invalid code. Need a code? Book one below.</p>}
           <Button className="w-full" onClick={handleSubmit}>Submit</Button>
+          <Button variant="outline" className="w-full" onClick={onBookCode}>
+            Book a Code
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

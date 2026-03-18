@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Search } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Search, LogIn } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,13 +11,14 @@ import CodeDialog from "@/components/CodeDialog";
 import BookingDialog from "@/components/BookingDialog";
 import VideoPlayer from "@/components/VideoPlayer";
 import { Button } from "@/components/ui/button";
-import { LogIn } from "lucide-react";
 import { toast } from "sonner";
 
 const Index = () => {
-  const { user, login } = useAuth();
+  const { user, login, loading } = useAuth();
   const [search, setSearch] = useState("");
   const [filterPlaylist, setFilterPlaylist] = useState("all");
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [playlists, setPlaylists] = useState<{ id: string; name: string }[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [codeType, setCodeType] = useState<"watch" | "download">("watch");
   const [showCode, setShowCode] = useState(false);
@@ -25,8 +26,18 @@ const Index = () => {
   const [showPlayer, setShowPlayer] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ video: Video; type: "watch" | "download" } | null>(null);
 
-  const videos = store.getVideos();
-  const playlists = store.getPlaylists();
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [v, p] = await Promise.all([store.getVideos(), store.getPlaylists()]);
+        setVideos(v);
+        setPlaylists(p);
+      } catch (e) {
+        console.error("Failed to load data", e);
+      }
+    };
+    load();
+  }, []);
 
   const filtered = useMemo(() => {
     return videos.filter((v) => {
@@ -54,7 +65,6 @@ const Index = () => {
       setSelectedVideo(pendingAction.video);
       setShowPlayer(true);
     } else {
-      // Trigger download
       const a = document.createElement("a");
       a.href = pendingAction.video.videoUrl;
       a.download = pendingAction.video.name;
@@ -69,20 +79,22 @@ const Index = () => {
     setShowBooking(true);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <main className="max-w-6xl mx-auto px-4 py-6">
-        {/* Search & Filter */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search videos..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
+            <Input placeholder="Search videos..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
           </div>
           <Select value={filterPlaylist} onValueChange={setFilterPlaylist}>
             <SelectTrigger className="w-full sm:w-48">
@@ -102,7 +114,7 @@ const Index = () => {
             <h2 className="text-xl font-semibold mb-2 text-foreground">Welcome to MV Player</h2>
             <p className="text-muted-foreground mb-6">Sign in with Google to watch and download videos</p>
             <Button onClick={login} className="gap-2">
-              <LogIn className="h-4 w-4" /> Sign In
+              <LogIn className="h-4 w-4" /> Sign In with Google
             </Button>
           </div>
         )}
@@ -133,6 +145,7 @@ const Index = () => {
         video={selectedVideo}
         type={codeType}
         onSuccess={handleCodeSuccess}
+        onBookCode={handleBookCode}
       />
 
       <BookingDialog
