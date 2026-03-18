@@ -14,7 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          notified: boolean | null
+          place: string
+          type: string
+          video_id: string
+          video_name: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          notified?: boolean | null
+          place: string
+          type: string
+          video_id: string
+          video_name: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          notified?: boolean | null
+          place?: string
+          type?: string
+          video_id?: string
+          video_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      playlists: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      videos: {
+        Row: {
+          category: string | null
+          cover_image_url: string | null
+          created_at: string
+          download_code: string | null
+          download_price: string | null
+          id: string
+          name: string
+          playlist: string | null
+          video_url: string
+          watch_code: string | null
+          watch_price: string | null
+        }
+        Insert: {
+          category?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          download_code?: string | null
+          download_price?: string | null
+          id?: string
+          name: string
+          playlist?: string | null
+          video_url: string
+          watch_code?: string | null
+          watch_price?: string | null
+        }
+        Update: {
+          category?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          download_code?: string | null
+          download_price?: string | null
+          id?: string
+          name?: string
+          playlist?: string | null
+          video_url?: string
+          watch_code?: string | null
+          watch_price?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
