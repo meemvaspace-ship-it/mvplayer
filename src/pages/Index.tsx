@@ -76,9 +76,17 @@ const Index = () => {
     setShowCode(true);
   };
 
-  const handleCodeSuccess = () => {
+  const handleCodeSuccess = async () => {
     if (selectedVideo) {
       setShowPlayer(true);
+      // Record watch history
+      if (user) {
+        try {
+          await store.addWatchHistory(user.id, selectedVideo.id, selectedVideo.name);
+        } catch (e) {
+          console.error("Failed to record history", e);
+        }
+      }
     }
   };
 
