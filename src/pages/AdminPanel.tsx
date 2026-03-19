@@ -4,8 +4,9 @@ import { ArrowLeft, Trash2, Plus, Upload, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { store } from "@/store/appStore";
-import { Video, Playlist, Booking } from "@/types/video";
+import { Video, Playlist, Booking, Ad } from "@/types/video";
 import { toast } from "sonner";
 
 const AdminPanel = () => {
@@ -13,6 +14,7 @@ const AdminPanel = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [ads, setAds] = useState<Ad[]>([]);
 
   // Upload form state
   const [name, setName] = useState("");
@@ -28,13 +30,27 @@ const AdminPanel = () => {
   const [watchCode, setWatchCode] = useState("");
   const [newPlaylist, setNewPlaylist] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Ads form state
+  const [adTitle, setAdTitle] = useState("");
+  const [adSubtitle, setAdSubtitle] = useState("");
+  const [adFile, setAdFile] = useState<File | null>(null);
+  const [adPreview, setAdPreview] = useState("");
+  const [adUploading, setAdUploading] = useState(false);
 
   const loadData = async () => {
     try {
-      const [v, p, b] = await Promise.all([store.getVideos(), store.getPlaylists(), store.getBookings()]);
+      const [v, p, b, a] = await Promise.all([
+        store.getVideos(),
+        store.getPlaylists(),
+        store.getBookings(),
+        store.getAds(),
+      ]);
       setVideos(v);
       setPlaylists(p);
       setBookings(b);
+      setAds(a);
     } catch (e) {
       console.error("Failed to load admin data", e);
     }
@@ -69,9 +85,12 @@ const AdminPanel = () => {
     }
 
     setUploading(true);
+    setUploadProgress(0);
     try {
       const videoPath = `${Date.now()}-${videoFile.name}`;
-      const videoUrl = await store.uploadFile("videos", videoPath, videoFile);
+      const videoUrl = await store.uploadFileWithProgress("videos", videoPath, videoFile, (percent) => {
+        setUploadProgress(percent);
+      });
 
       let coverImageUrl = "";
       if (coverFile) {
@@ -94,7 +113,7 @@ const AdminPanel = () => {
       await loadData();
       setName(""); setCoverFile(null); setCoverPreview(""); setVideoFile(null); setVideoFileName("");
       setPlaylist(""); setCategory(""); setDownloadPrice(""); setWatchPrice("");
-      setDownloadCode(""); setWatchCode("");
+      setDownloadCode(""); setWatchCode(""); setUploadProgress(0);
       toast.success("Video uploaded!");
     } catch (e: any) {
       toast.error("Upload failed: " + (e.message || "Unknown error"));
@@ -145,6 +164,46 @@ const AdminPanel = () => {
     }
   };
 
+  const handleAdImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAdFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setAdPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCreateAd = async () => {
+    if (!adTitle.trim() || !adFile) {
+      toast.error("Title and image are required");
+      return;
+    }
+    setAdUploading(true);
+    try {
+      const path = `${Date.now()}-${adFile.name}`;
+      const imageUrl = await store.uploadFile("ads", path, adFile);
+      await store.addAd({ title: adTitle.trim(), subtitle: adSubtitle.trim(), imageUrl });
+      await loadData();
+      setAdTitle(""); setAdSubtitle(""); setAdFile(null); setAdPreview("");
+      toast.success("Ad created!");
+    } catch (e: any) {
+      toast.error("Failed to create ad: " + (e.message || "Unknown error"));
+    } finally {
+      setAdUploading(false);
+    }
+  };
+
+  const handleDeleteAd = async (id: string) => {
+    try {
+      await store.deleteAd(id);
+      await loadData();
+      toast.success("Ad deleted");
+    } catch {
+      toast.error("Failed to delete ad");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 bg-card border-b border-border">
@@ -156,10 +215,11 @@ const AdminPanel = () => {
 
       <main className="max-w-4xl mx-auto px-4 py-6">
         <Tabs defaultValue="upload">
-          <TabsList className="w-full grid grid-cols-3">
-            <TabsTrigger value="upload">Upload Video</TabsTrigger>
+          <TabsList className="w-full grid grid-cols-4">
+            <TabsTrigger value="upload">Upload</TabsTrigger>
             <TabsTrigger value="playlists">Playlists</TabsTrigger>
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
+            <TabsTrigger value="ads">Ads</TabsTrigger>
           </TabsList>
 
           <TabsContent value="upload" className="space-y-6 mt-4">
@@ -189,14 +249,25 @@ const AdminPanel = () => {
               <Input placeholder="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
               <div className="grid grid-cols-2 gap-3">
                 <Input placeholder="Watch Price" value={watchPrice} onChange={(e) => setWatchPrice(e.target.value)} />
-                <Input placeholder="Download Price" value={downloadPrice} onChange={(e) => setDownloadPrice(e.target.value)} />
+                <Input placeholder="Watch Code" value={watchCode} onChange={(e) => setWatchCode(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="Watch Code" value={watchCode} onChange={(e) => setWatchCode(e.target.value)} />
+                <Input placeholder="Download Price" value={downloadPrice} onChange={(e) => setDownloadPrice(e.target.value)} />
                 <Input placeholder="Download Code" value={downloadCode} onChange={(e) => setDownloadCode(e.target.value)} />
               </div>
+
+              {uploading && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Uploading video...</span>
+                    <span className="font-semibold text-primary">{uploadProgress}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-3" />
+                </div>
+              )}
+
               <Button onClick={handleUploadVideo} className="w-full gap-2" disabled={uploading}>
-                <Upload className="h-4 w-4" /> {uploading ? "Uploading..." : "Upload Video"}
+                <Upload className="h-4 w-4" /> {uploading ? `Uploading... ${uploadProgress}%` : "Upload Video"}
               </Button>
             </div>
 
@@ -262,6 +333,40 @@ const AdminPanel = () => {
                 </div>
               </div>
             ))}
+          </TabsContent>
+
+          <TabsContent value="ads" className="space-y-6 mt-4">
+            <div className="bg-card p-4 rounded-lg border border-border space-y-3">
+              <h2 className="font-semibold text-foreground">Create New Ad</h2>
+              <Input placeholder="Ad Title" value={adTitle} onChange={(e) => setAdTitle(e.target.value)} />
+              <Input placeholder="Ad Subtitle (optional)" value={adSubtitle} onChange={(e) => setAdSubtitle(e.target.value)} />
+              <div>
+                <label className="text-sm text-muted-foreground">Ad Image</label>
+                <Input type="file" accept="image/*" onChange={handleAdImageSelect} />
+                {adPreview && <img src={adPreview} alt="Ad Preview" className="h-24 mt-2 rounded object-cover" />}
+              </div>
+              <Button onClick={handleCreateAd} className="w-full gap-2" disabled={adUploading}>
+                <Plus className="h-4 w-4" /> {adUploading ? "Creating..." : "Create Ad"}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="font-semibold text-foreground">Active Ads ({ads.length})</h2>
+              {ads.map((ad) => (
+                <div key={ad.id} className="flex items-center justify-between p-3 bg-card border border-border rounded-lg">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img src={ad.imageUrl} alt={ad.title} className="h-10 w-16 object-cover rounded" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate text-foreground">{ad.title}</p>
+                      {ad.subtitle && <p className="text-xs text-muted-foreground">{ad.subtitle}</p>}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteAd(ad.id)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </TabsContent>
         </Tabs>
       </main>

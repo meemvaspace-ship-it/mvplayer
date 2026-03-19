@@ -29,3 +29,11 @@ export interface Booking {
   createdAt: string;
   notified: boolean;
 }
+
+export interface Ad {
+  id: string;
+  title: string;
+  subtitle: string;
+  imageUrl: string;
+  createdAt: string;
+}

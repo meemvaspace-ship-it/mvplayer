@@ -112,11 +112,93 @@ export const store = {
     if (error) throw error;
   },
 
+  // Favorites
+  getFavorites: async (userId: string) => {
+    const { data, error } = await supabase
+      .from("favorites")
+      .select("video_id")
+      .eq("user_id", userId);
+    if (error) throw error;
+    return (data || []).map((f: any) => f.video_id as string);
+  },
+
+  addFavorite: async (userId: string, videoId: string) => {
+    const { error } = await supabase.from("favorites").insert({ user_id: userId, video_id: videoId });
+    if (error) throw error;
+  },
+
+  removeFavorite: async (userId: string, videoId: string) => {
+    const { error } = await supabase.from("favorites").delete().eq("user_id", userId).eq("video_id", videoId);
+    if (error) throw error;
+  },
+
+  // Ads
+  getAds: async () => {
+    const { data, error } = await supabase.from("ads").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data || []).map((a: any) => ({
+      id: a.id,
+      title: a.title,
+      subtitle: a.subtitle,
+      imageUrl: a.image_url,
+      createdAt: a.created_at,
+    }));
+  },
+
+  addAd: async (ad: { title: string; subtitle: string; imageUrl: string }) => {
+    const { error } = await supabase.from("ads").insert({
+      title: ad.title,
+      subtitle: ad.subtitle,
+      image_url: ad.imageUrl,
+    });
+    if (error) throw error;
+  },
+
+  deleteAd: async (id: string) => {
+    const { error } = await supabase.from("ads").delete().eq("id", id);
+    if (error) throw error;
+  },
+
   // Storage helpers
   uploadFile: async (bucket: string, path: string, file: File) => {
     const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
     if (error) throw error;
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
+  },
+
+  uploadFileWithProgress: async (
+    bucket: string,
+    path: string,
+    file: File,
+    onProgress: (percent: number) => void
+  ): Promise<string> => {
+    // Use XMLHttpRequest for progress tracking
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          onProgress(percent);
+        }
+      });
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+          resolve(data.publicUrl);
+        } else {
+          reject(new Error(`Upload failed: ${xhr.statusText}`));
+        }
+      });
+      xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+      xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${path}`);
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.setRequestHeader("x-upsert", "true");
+      xhr.send(file);
+    });
   },
 };
