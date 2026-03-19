@@ -1,14 +1,15 @@
 import { Video } from "@/types/video";
-import { Play, Download } from "lucide-react";
+import { Play, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Props {
   video: Video;
   onWatch: (v: Video) => void;
-  onDownload: (v: Video) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (v: Video) => void;
 }
 
-const VideoCard = ({ video, onWatch, onDownload }: Props) => {
+const VideoCard = ({ video, onWatch, isFavorite, onToggleFavorite }: Props) => {
   return (
     <div className="group rounded-lg overflow-hidden bg-card border border-border transition-colors hover:border-primary/40">
       <div className="relative aspect-video bg-muted overflow-hidden">
@@ -21,10 +22,15 @@ const VideoCard = ({ video, onWatch, onDownload }: Props) => {
           <Button size="sm" onClick={() => onWatch(video)} className="gap-1">
             <Play className="h-4 w-4" /> Watch
           </Button>
-          <Button size="sm" variant="secondary" onClick={() => onDownload(video)} className="gap-1">
-            <Download className="h-4 w-4" /> Download
-          </Button>
         </div>
+        {onToggleFavorite && (
+          <button
+            className="absolute top-2 right-2 p-1.5 rounded-full bg-background/70 hover:bg-background transition-colors"
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(video); }}
+          >
+            <Heart className={`h-4 w-4 ${isFavorite ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+          </button>
+        )}
       </div>
       <div className="p-3">
         <h3 className="font-semibold text-sm truncate text-foreground">{video.name}</h3>
@@ -38,7 +44,6 @@ const VideoCard = ({ video, onWatch, onDownload }: Props) => {
         </div>
         <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
           <span>Watch: ₹{video.watchPrice}</span>
-          <span>Download: ₹{video.downloadPrice}</span>
         </div>
       </div>
     </div>

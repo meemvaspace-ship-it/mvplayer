@@ -8,19 +8,16 @@ interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   video: Video | null;
-  type: "watch" | "download";
   onSuccess: () => void;
   onBookCode: () => void;
 }
 
-const CodeDialog = ({ open, onOpenChange, video, type, onSuccess, onBookCode }: Props) => {
+const CodeDialog = ({ open, onOpenChange, video, onSuccess, onBookCode }: Props) => {
   const [code, setCode] = useState("");
   const [error, setError] = useState(false);
 
-  const correctCode = type === "watch" ? video?.watchCode : video?.downloadCode;
-
   const handleSubmit = () => {
-    if (code === correctCode) {
+    if (code === video?.watchCode) {
       setCode("");
       setError(false);
       onSuccess();
@@ -34,7 +31,7 @@ const CodeDialog = ({ open, onOpenChange, video, type, onSuccess, onBookCode }: 
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) { setCode(""); setError(false); } }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Enter {type === "watch" ? "Watch" : "Download"} Code</DialogTitle>
+          <DialogTitle>Enter Watch Code</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
           Enter the code for <span className="font-semibold text-foreground">{video?.name}</span>
