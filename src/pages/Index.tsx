@@ -76,9 +76,17 @@ const Index = () => {
     setShowCode(true);
   };
 
-  const handleCodeSuccess = () => {
+  const handleCodeSuccess = async () => {
     if (selectedVideo) {
       setShowPlayer(true);
+      // Record watch history
+      if (user) {
+        try {
+          await store.addWatchHistory(user.id, selectedVideo.id, selectedVideo.name);
+        } catch (e) {
+          console.error("Failed to record history", e);
+        }
+      }
     }
   };
 
@@ -106,7 +114,7 @@ const Index = () => {
   };
 
   const renderVideoGrid = (vids: Video[]) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {vids.map((video) => (
         <VideoCard
           key={video.id}

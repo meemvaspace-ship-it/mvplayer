@@ -1,13 +1,15 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Moon, Sun } from "lucide-react";
+import { ArrowLeft, Moon, Sun, Clock, LogIn, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Separator } from "@/components/ui/separator";
 
 const Settings = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-background">
@@ -17,7 +19,33 @@ const Settings = () => {
         </Button>
         <h1 className="text-lg font-bold text-foreground">Settings</h1>
       </header>
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+        {/* Account */}
+        {user ? (
+          <div className="flex items-center justify-between p-4 bg-card border border-border rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-foreground">{user.name}</p>
+              <p className="text-xs text-muted-foreground">{user.email}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={logout} className="gap-1">
+              <LogOut className="h-4 w-4" /> Sign Out
+            </Button>
+          </div>
+        ) : (
+          <button
+            onClick={() => navigate("/login")}
+            className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:border-primary/40 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <LogIn className="h-5 w-5 text-primary" />
+              <div className="text-left">
+                <p className="text-sm font-medium text-foreground">Sign In</p>
+                <p className="text-xs text-muted-foreground">Sign in to save favorites & history</p>
+              </div>
+            </div>
+          </button>
+        )}
+
         {/* Theme Toggle */}
         <div className="flex items-center justify-between p-4 bg-card border border-border rounded-lg">
           <div className="flex items-center gap-3">
@@ -29,6 +57,20 @@ const Settings = () => {
           </div>
           <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
         </div>
+
+        {/* Watch History */}
+        <button
+          onClick={() => navigate("/history")}
+          className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-lg hover:border-primary/40 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Clock className="h-5 w-5 text-primary" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-foreground">Watch History</p>
+              <p className="text-xs text-muted-foreground">View your watching timeline</p>
+            </div>
+          </div>
+        </button>
 
         <Separator />
 
@@ -53,15 +95,14 @@ const Settings = () => {
           <h2 className="font-semibold mb-3 text-foreground">Privacy Policy</h2>
           <div className="text-sm text-muted-foreground space-y-2">
             <p>MV Player is committed to protecting your privacy. This policy outlines how we collect, use, and safeguard your personal information.</p>
-            <p><strong>1. Information We Collect:</strong> When you use MV Player, we may collect your name, email address, and location information through our booking system. We also collect authentication data when you sign in with Google, including your profile name and email address.</p>
+            <p><strong>1. Information We Collect:</strong> When you use MV Player, we may collect your name, email address, and location information through our booking system. We also collect authentication data when you sign in, including your profile name and email address.</p>
             <p><strong>2. How We Use Your Information:</strong> Your personal data is used solely for the purpose of processing code bookings, delivering access codes, and improving our services. We do not sell, rent, or trade your personal information to any third parties.</p>
             <p><strong>3. Data Storage & Security:</strong> All user data is stored securely using industry-standard encryption and cloud infrastructure. We implement appropriate technical and organizational measures to protect your data against unauthorized access, alteration, or deletion.</p>
-            <p><strong>4. Third-Party Services:</strong> MV Player uses Google Authentication for secure sign-in. When you sign in with Google, your authentication is handled by Google's secure servers. We only receive basic profile information (name and email) and do not access your Google account data.</p>
-            <p><strong>5. Cookies & Local Storage:</strong> We use local storage on your device to save your theme preferences and enhance your browsing experience. No tracking cookies are used for advertising purposes.</p>
-            <p><strong>6. Data Retention:</strong> We retain your booking information for as long as it is necessary to provide our services. You may request deletion of your data at any time by contacting our support team.</p>
-            <p><strong>7. Children's Privacy:</strong> MV Player does not knowingly collect personal information from children under 13. If we become aware that we have collected data from a child under 13, we will take immediate steps to delete it.</p>
-            <p><strong>8. Your Rights:</strong> You have the right to access, correct, or delete your personal data at any time. You may also withdraw your consent to data processing, though this may affect your ability to use certain features of the application.</p>
-            <p><strong>9. Contact Us:</strong> If you have any questions or concerns about this Privacy Policy, please reach out through our booking system or contact the application administrator.</p>
+            <p><strong>4. Cookies & Local Storage:</strong> We use local storage on your device to save your theme preferences and enhance your browsing experience. No tracking cookies are used for advertising purposes.</p>
+            <p><strong>5. Data Retention:</strong> We retain your booking information for as long as it is necessary to provide our services. You may request deletion of your data at any time by contacting our support team.</p>
+            <p><strong>6. Children's Privacy:</strong> MV Player does not knowingly collect personal information from children under 13. If we become aware that we have collected data from a child under 13, we will take immediate steps to delete it.</p>
+            <p><strong>7. Your Rights:</strong> You have the right to access, correct, or delete your personal data at any time. You may also withdraw your consent to data processing, though this may affect your ability to use certain features of the application.</p>
+            <p><strong>8. Contact Us:</strong> If you have any questions or concerns about this Privacy Policy, please reach out through our booking system or contact the application administrator.</p>
           </div>
         </div>
       </main>
