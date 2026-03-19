@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface User {
@@ -12,12 +11,11 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: () => void;
   logout: () => void;
   loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, login: () => {}, logout: () => {}, loading: true });
+const AuthContext = createContext<AuthContextType>({ user: null, logout: () => {}, loading: true });
 
 function mapUser(u: SupabaseUser): User {
   const meta = u.user_metadata || {};
@@ -53,18 +51,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  const login = async () => {
-    await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-  };
-
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
   };
 
-  return <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, logout, loading }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);

@@ -45,6 +45,30 @@ export const store = {
     if (error) throw error;
   },
 
+  updateVideo: async (id: string, v: {
+    name: string;
+    playlist: string;
+    category: string;
+    watchPrice: string;
+    watchCode: string;
+    downloadPrice: string;
+    downloadCode: string;
+    coverImage?: string;
+  }) => {
+    const updates: any = {
+      name: v.name,
+      playlist: v.playlist,
+      category: v.category,
+      watch_price: v.watchPrice,
+      watch_code: v.watchCode,
+      download_price: v.downloadPrice,
+      download_code: v.downloadCode,
+    };
+    if (v.coverImage !== undefined) updates.cover_image_url = v.coverImage;
+    const { error } = await supabase.from("videos").update(updates).eq("id", id);
+    if (error) throw error;
+  },
+
   deleteVideo: async (id: string) => {
     const { error } = await supabase.from("videos").delete().eq("id", id);
     if (error) throw error;
@@ -54,11 +78,7 @@ export const store = {
   getPlaylists: async () => {
     const { data, error } = await supabase.from("playlists").select("*").order("created_at", { ascending: false });
     if (error) throw error;
-    return (data || []).map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      createdAt: p.created_at,
-    }));
+    return (data || []).map((p: any) => ({ id: p.id, name: p.name, createdAt: p.created_at }));
   },
 
   addPlaylist: async (name: string) => {
@@ -76,33 +96,14 @@ export const store = {
     const { data, error } = await supabase.from("bookings").select("*").order("created_at", { ascending: false });
     if (error) throw error;
     return (data || []).map((b: any) => ({
-      id: b.id,
-      videoId: b.video_id,
-      videoName: b.video_name,
-      type: b.type,
-      name: b.name,
-      email: b.email,
-      place: b.place,
-      createdAt: b.created_at,
-      notified: b.notified,
+      id: b.id, videoId: b.video_id, videoName: b.video_name, type: b.type,
+      name: b.name, email: b.email, place: b.place, createdAt: b.created_at, notified: b.notified,
     }));
   },
 
-  addBooking: async (b: {
-    videoId: string;
-    videoName: string;
-    type: "watch" | "download";
-    name: string;
-    email: string;
-    place: string;
-  }) => {
+  addBooking: async (b: { videoId: string; videoName: string; type: "watch" | "download"; name: string; email: string; place: string }) => {
     const { error } = await supabase.from("bookings").insert({
-      video_id: b.videoId,
-      video_name: b.videoName,
-      type: b.type,
-      name: b.name,
-      email: b.email,
-      place: b.place,
+      video_id: b.videoId, video_name: b.videoName, type: b.type, name: b.name, email: b.email, place: b.place,
     });
     if (error) throw error;
   },
@@ -114,10 +115,7 @@ export const store = {
 
   // Favorites
   getFavorites: async (userId: string) => {
-    const { data, error } = await supabase
-      .from("favorites")
-      .select("video_id")
-      .eq("user_id", userId);
+    const { data, error } = await supabase.from("favorites").select("video_id").eq("user_id", userId);
     if (error) throw error;
     return (data || []).map((f: any) => f.video_id as string);
   },
@@ -137,25 +135,47 @@ export const store = {
     const { data, error } = await supabase.from("ads").select("*").order("created_at", { ascending: false });
     if (error) throw error;
     return (data || []).map((a: any) => ({
-      id: a.id,
-      title: a.title,
-      subtitle: a.subtitle,
-      imageUrl: a.image_url,
-      createdAt: a.created_at,
+      id: a.id, title: a.title, subtitle: a.subtitle, imageUrl: a.image_url, createdAt: a.created_at,
     }));
   },
 
   addAd: async (ad: { title: string; subtitle: string; imageUrl: string }) => {
-    const { error } = await supabase.from("ads").insert({
-      title: ad.title,
-      subtitle: ad.subtitle,
-      image_url: ad.imageUrl,
-    });
+    const { error } = await supabase.from("ads").insert({ title: ad.title, subtitle: ad.subtitle, image_url: ad.imageUrl });
     if (error) throw error;
   },
 
   deleteAd: async (id: string) => {
     const { error } = await supabase.from("ads").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  // Watch History
+  getWatchHistory: async (userId: string) => {
+    const { data, error } = await supabase
+      .from("watch_history")
+      .select("*")
+      .eq("user_id", userId)
+      .order("watched_at", { ascending: false });
+    if (error) throw error;
+    return (data || []).map((h: any) => ({
+      id: h.id, videoId: h.video_id, videoName: h.video_name, watchedAt: h.watched_at,
+    }));
+  },
+
+  addWatchHistory: async (userId: string, videoId: string, videoName: string) => {
+    const { error } = await supabase.from("watch_history").insert({
+      user_id: userId, video_id: videoId, video_name: videoName,
+    });
+    if (error) throw error;
+  },
+
+  deleteWatchHistory: async (id: string) => {
+    const { error } = await supabase.from("watch_history").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  clearWatchHistory: async (userId: string) => {
+    const { error } = await supabase.from("watch_history").delete().eq("user_id", userId);
     if (error) throw error;
   },
 
@@ -168,12 +188,8 @@ export const store = {
   },
 
   uploadFileWithProgress: async (
-    bucket: string,
-    path: string,
-    file: File,
-    onProgress: (percent: number) => void
+    bucket: string, path: string, file: File, onProgress: (percent: number) => void
   ): Promise<string> => {
-    // Use XMLHttpRequest for progress tracking
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -181,10 +197,7 @@ export const store = {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100);
-          onProgress(percent);
-        }
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
       });
       xhr.addEventListener("load", () => {
         if (xhr.status >= 200 && xhr.status < 300) {

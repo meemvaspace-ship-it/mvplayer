@@ -10,13 +10,14 @@ import SplashScreen from "@/components/SplashScreen";
 import Index from "./pages/Index";
 import AdminPanel from "./pages/AdminPanel";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
+import History from "./pages/History";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const App = () => {
   const [showSplash, setShowSplash] = useState(true);
-
   const handleSplashDone = useCallback(() => setShowSplash(false), []);
 
   return (
@@ -30,8 +31,10 @@ const App = () => {
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
                 <Route path="/admin" element={<AdminPanel />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/history" element={<History />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
