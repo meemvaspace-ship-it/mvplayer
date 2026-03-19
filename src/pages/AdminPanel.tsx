@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Trash2, Plus, Upload, Mail } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Upload, Mail, Pencil, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,6 +32,15 @@ const AdminPanel = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<{
+    name: string; playlist: string; category: string;
+    watchPrice: string; watchCode: string; downloadPrice: string; downloadCode: string;
+  }>({ name: "", playlist: "", category: "", watchPrice: "", watchCode: "", downloadPrice: "", downloadCode: "" });
+  const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
   // Ads form state
   const [adTitle, setAdTitle] = useState("");
   const [adSubtitle, setAdSubtitle] = useState("");
@@ -41,175 +50,102 @@ const AdminPanel = () => {
 
   const loadData = async () => {
     try {
-      const [v, p, b, a] = await Promise.all([
-        store.getVideos(),
-        store.getPlaylists(),
-        store.getBookings(),
-        store.getAds(),
-      ]);
-      setVideos(v);
-      setPlaylists(p);
-      setBookings(b);
-      setAds(a);
-    } catch (e) {
-      console.error("Failed to load admin data", e);
-    }
+      const [v, p, b, a] = await Promise.all([store.getVideos(), store.getPlaylists(), store.getBookings(), store.getAds()]);
+      setVideos(v); setPlaylists(p); setBookings(b); setAds(a);
+    } catch (e) { console.error("Failed to load admin data", e); }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setCoverFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setCoverPreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
+    if (file) { setCoverFile(file); const r = new FileReader(); r.onloadend = () => setCoverPreview(r.result as string); r.readAsDataURL(file); }
   };
 
   const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setVideoFile(file);
-      setVideoFileName(file.name);
-    }
+    if (file) { setVideoFile(file); setVideoFileName(file.name); }
   };
 
   const handleUploadVideo = async () => {
-    if (!name.trim() || !videoFile) {
-      toast.error("Name and video file are required");
-      return;
-    }
-
-    setUploading(true);
-    setUploadProgress(0);
+    if (!name.trim() || !videoFile) { toast.error("Name and video file are required"); return; }
+    setUploading(true); setUploadProgress(0);
     try {
       const videoPath = `${Date.now()}-${videoFile.name}`;
-      const videoUrl = await store.uploadFileWithProgress("videos", videoPath, videoFile, (percent) => {
-        setUploadProgress(percent);
-      });
-
+      const videoUrl = await store.uploadFileWithProgress("videos", videoPath, videoFile, (p) => setUploadProgress(p));
       let coverImageUrl = "";
-      if (coverFile) {
-        const coverPath = `${Date.now()}-${coverFile.name}`;
-        coverImageUrl = await store.uploadFile("covers", coverPath, coverFile);
-      }
-
-      await store.addVideo({
-        name: name.trim(),
-        coverImage: coverImageUrl,
-        videoUrl,
-        playlist,
-        category: category.trim(),
-        downloadPrice: downloadPrice || "0",
-        watchPrice: watchPrice || "0",
-        downloadCode: downloadCode.trim(),
-        watchCode: watchCode.trim(),
-      });
-
+      if (coverFile) { const cp = `${Date.now()}-${coverFile.name}`; coverImageUrl = await store.uploadFile("covers", cp, coverFile); }
+      await store.addVideo({ name: name.trim(), coverImage: coverImageUrl, videoUrl, playlist, category: category.trim(), downloadPrice: downloadPrice || "0", watchPrice: watchPrice || "0", downloadCode: downloadCode.trim(), watchCode: watchCode.trim() });
       await loadData();
-      setName(""); setCoverFile(null); setCoverPreview(""); setVideoFile(null); setVideoFileName("");
-      setPlaylist(""); setCategory(""); setDownloadPrice(""); setWatchPrice("");
-      setDownloadCode(""); setWatchCode(""); setUploadProgress(0);
+      setName(""); setCoverFile(null); setCoverPreview(""); setVideoFile(null); setVideoFileName(""); setPlaylist(""); setCategory(""); setDownloadPrice(""); setWatchPrice(""); setDownloadCode(""); setWatchCode(""); setUploadProgress(0);
       toast.success("Video uploaded!");
-    } catch (e: any) {
-      toast.error("Upload failed: " + (e.message || "Unknown error"));
-    } finally {
-      setUploading(false);
-    }
+    } catch (e: any) { toast.error("Upload failed: " + (e.message || "Unknown error")); } finally { setUploading(false); }
   };
 
   const handleDeleteVideo = async (id: string) => {
+    try { await store.deleteVideo(id); await loadData(); toast.success("Video deleted"); } catch { toast.error("Failed to delete video"); }
+  };
+
+  const startEdit = (v: Video) => {
+    setEditingId(v.id);
+    setEditData({ name: v.name, playlist: v.playlist, category: v.category, watchPrice: v.watchPrice, watchCode: v.watchCode, downloadPrice: v.downloadPrice, downloadCode: v.downloadCode });
+    setEditCoverFile(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    setEditSaving(true);
     try {
-      await store.deleteVideo(id);
+      let coverImage: string | undefined;
+      if (editCoverFile) {
+        const cp = `${Date.now()}-${editCoverFile.name}`;
+        coverImage = await store.uploadFile("covers", cp, editCoverFile);
+      }
+      await store.updateVideo(editingId, { ...editData, coverImage });
       await loadData();
-      toast.success("Video deleted");
-    } catch {
-      toast.error("Failed to delete video");
-    }
+      setEditingId(null);
+      toast.success("Video updated!");
+    } catch (e: any) { toast.error("Update failed: " + (e.message || "Unknown error")); } finally { setEditSaving(false); }
   };
 
   const handleAddPlaylist = async () => {
     if (!newPlaylist.trim()) return;
-    try {
-      await store.addPlaylist(newPlaylist.trim());
-      await loadData();
-      setNewPlaylist("");
-      toast.success("Playlist created");
-    } catch {
-      toast.error("Failed to create playlist");
-    }
+    try { await store.addPlaylist(newPlaylist.trim()); await loadData(); setNewPlaylist(""); toast.success("Playlist created"); } catch { toast.error("Failed to create playlist"); }
   };
 
   const handleDeletePlaylist = async (id: string) => {
-    try {
-      await store.deletePlaylist(id);
-      await loadData();
-      toast.success("Playlist deleted");
-    } catch {
-      toast.error("Failed to delete playlist");
-    }
+    try { await store.deletePlaylist(id); await loadData(); toast.success("Playlist deleted"); } catch { toast.error("Failed to delete playlist"); }
   };
 
   const handleNotify = async (b: Booking) => {
-    try {
-      await store.markNotified(b.id);
-      await loadData();
-      toast.success(`Code info notification marked for ${b.email}`);
-    } catch {
-      toast.error("Failed to update booking");
-    }
+    try { await store.markNotified(b.id); await loadData(); toast.success(`Marked as notified for ${b.email}`); } catch { toast.error("Failed to update booking"); }
   };
 
   const handleAdImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setAdFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setAdPreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
+    if (file) { setAdFile(file); const r = new FileReader(); r.onloadend = () => setAdPreview(r.result as string); r.readAsDataURL(file); }
   };
 
   const handleCreateAd = async () => {
-    if (!adTitle.trim() || !adFile) {
-      toast.error("Title and image are required");
-      return;
-    }
+    if (!adTitle.trim() || !adFile) { toast.error("Title and image are required"); return; }
     setAdUploading(true);
     try {
       const path = `${Date.now()}-${adFile.name}`;
       const imageUrl = await store.uploadFile("ads", path, adFile);
       await store.addAd({ title: adTitle.trim(), subtitle: adSubtitle.trim(), imageUrl });
-      await loadData();
-      setAdTitle(""); setAdSubtitle(""); setAdFile(null); setAdPreview("");
+      await loadData(); setAdTitle(""); setAdSubtitle(""); setAdFile(null); setAdPreview("");
       toast.success("Ad created!");
-    } catch (e: any) {
-      toast.error("Failed to create ad: " + (e.message || "Unknown error"));
-    } finally {
-      setAdUploading(false);
-    }
+    } catch (e: any) { toast.error("Failed to create ad: " + (e.message || "Unknown error")); } finally { setAdUploading(false); }
   };
 
   const handleDeleteAd = async (id: string) => {
-    try {
-      await store.deleteAd(id);
-      await loadData();
-      toast.success("Ad deleted");
-    } catch {
-      toast.error("Failed to delete ad");
-    }
+    try { await store.deleteAd(id); await loadData(); toast.success("Ad deleted"); } catch { toast.error("Failed to delete ad"); }
   };
 
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 bg-card border-b border-border">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/")}><ArrowLeft className="h-5 w-5" /></Button>
         <h1 className="text-lg font-bold text-primary">Admin Panel</h1>
       </header>
 
@@ -236,15 +172,9 @@ const AdminPanel = () => {
                 <Input type="file" accept="image/*" onChange={handleCoverSelect} />
                 {coverPreview && <img src={coverPreview} alt="Preview" className="h-24 mt-2 rounded object-cover" />}
               </div>
-              <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
-                value={playlist}
-                onChange={(e) => setPlaylist(e.target.value)}
-              >
+              <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" value={playlist} onChange={(e) => setPlaylist(e.target.value)}>
                 <option value="">Select Playlist</option>
-                {playlists.map((p) => (
-                  <option key={p.id} value={p.name}>{p.name}</option>
-                ))}
+                {playlists.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
               </select>
               <Input placeholder="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
               <div className="grid grid-cols-2 gap-3">
@@ -255,7 +185,6 @@ const AdminPanel = () => {
                 <Input placeholder="Download Price" value={downloadPrice} onChange={(e) => setDownloadPrice(e.target.value)} />
                 <Input placeholder="Download Code" value={downloadCode} onChange={(e) => setDownloadCode(e.target.value)} />
               </div>
-
               {uploading && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
@@ -265,7 +194,6 @@ const AdminPanel = () => {
                   <Progress value={uploadProgress} className="h-3" />
                 </div>
               )}
-
               <Button onClick={handleUploadVideo} className="w-full gap-2" disabled={uploading}>
                 <Upload className="h-4 w-4" /> {uploading ? `Uploading... ${uploadProgress}%` : "Upload Video"}
               </Button>
@@ -274,17 +202,51 @@ const AdminPanel = () => {
             <div className="space-y-2">
               <h2 className="font-semibold text-foreground">Uploaded Videos ({videos.length})</h2>
               {videos.map((v) => (
-                <div key={v.id} className="flex items-center justify-between p-3 bg-card border border-border rounded-lg">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {v.coverImage && <img src={v.coverImage} alt={v.name} className="h-10 w-16 object-cover rounded" />}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate text-foreground">{v.name}</p>
-                      <p className="text-xs text-muted-foreground">{v.category} • {v.playlist}</p>
+                <div key={v.id} className="p-3 bg-card border border-border rounded-lg">
+                  {editingId === v.id ? (
+                    <div className="space-y-3">
+                      <Input placeholder="Name" value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
+                      <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" value={editData.playlist} onChange={(e) => setEditData({ ...editData, playlist: e.target.value })}>
+                        <option value="">Select Playlist</option>
+                        {playlists.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                      </select>
+                      <Input placeholder="Category" value={editData.category} onChange={(e) => setEditData({ ...editData, category: e.target.value })} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input placeholder="Watch Price" value={editData.watchPrice} onChange={(e) => setEditData({ ...editData, watchPrice: e.target.value })} />
+                        <Input placeholder="Watch Code" value={editData.watchCode} onChange={(e) => setEditData({ ...editData, watchCode: e.target.value })} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input placeholder="Download Price" value={editData.downloadPrice} onChange={(e) => setEditData({ ...editData, downloadPrice: e.target.value })} />
+                        <Input placeholder="Download Code" value={editData.downloadCode} onChange={(e) => setEditData({ ...editData, downloadCode: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="text-sm text-muted-foreground">Replace Cover Image (optional)</label>
+                        <Input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) setEditCoverFile(f); }} />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={handleSaveEdit} disabled={editSaving} className="gap-1" size="sm">
+                          <Check className="h-4 w-4" /> {editSaving ? "Saving..." : "Save"}
+                        </Button>
+                        <Button variant="outline" onClick={() => setEditingId(null)} size="sm" className="gap-1">
+                          <X className="h-4 w-4" /> Cancel
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteVideo(v.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {v.coverImage && <img src={v.coverImage} alt={v.name} className="h-10 w-16 object-cover rounded" />}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate text-foreground">{v.name}</p>
+                          <p className="text-xs text-muted-foreground">{v.category} • {v.playlist}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => startEdit(v)}><Pencil className="h-4 w-4 text-primary" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteVideo(v.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -292,20 +254,13 @@ const AdminPanel = () => {
 
           <TabsContent value="playlists" className="space-y-4 mt-4">
             <div className="flex gap-2">
-              <Input
-                placeholder="New Playlist Name"
-                value={newPlaylist}
-                onChange={(e) => setNewPlaylist(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddPlaylist()}
-              />
+              <Input placeholder="New Playlist Name" value={newPlaylist} onChange={(e) => setNewPlaylist(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddPlaylist()} />
               <Button onClick={handleAddPlaylist}><Plus className="h-4 w-4" /></Button>
             </div>
             {playlists.map((p) => (
               <div key={p.id} className="flex items-center justify-between p-3 bg-card border border-border rounded-lg">
                 <span className="text-sm font-medium text-foreground">{p.name}</span>
-                <Button variant="ghost" size="icon" onClick={() => handleDeletePlaylist(p.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                <Button variant="ghost" size="icon" onClick={() => handleDeletePlaylist(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             ))}
           </TabsContent>
@@ -322,12 +277,9 @@ const AdminPanel = () => {
                     <p className="text-xs text-primary">Video: {b.videoName}</p>
                     <p className="text-xs text-muted-foreground">{new Date(b.createdAt).toLocaleString()}</p>
                   </div>
-                  {!b.notified && (
-                    <Button variant="outline" size="sm" onClick={() => handleNotify(b)} className="gap-1">
-                      <Mail className="h-3 w-3" /> Send Info
-                    </Button>
-                  )}
-                  {b.notified && (
+                  {!b.notified ? (
+                    <Button variant="outline" size="sm" onClick={() => handleNotify(b)} className="gap-1"><Mail className="h-3 w-3" /> Send Info</Button>
+                  ) : (
                     <span className="text-xs text-primary px-2 py-1 rounded-full bg-primary/10">Notified</span>
                   )}
                 </div>
@@ -349,7 +301,6 @@ const AdminPanel = () => {
                 <Plus className="h-4 w-4" /> {adUploading ? "Creating..." : "Create Ad"}
               </Button>
             </div>
-
             <div className="space-y-2">
               <h2 className="font-semibold text-foreground">Active Ads ({ads.length})</h2>
               {ads.map((ad) => (
@@ -361,9 +312,7 @@ const AdminPanel = () => {
                       {ad.subtitle && <p className="text-xs text-muted-foreground">{ad.subtitle}</p>}
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteAd(ad.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteAd(ad.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
               ))}
             </div>
