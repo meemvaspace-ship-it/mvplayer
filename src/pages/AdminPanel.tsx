@@ -1,13 +1,21 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Trash2, Plus, Upload, Mail, Pencil, X, Check } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, Upload, Mail, Pencil, X, Check, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { store } from "@/store/appStore";
 import { Video, Playlist, Booking, Ad } from "@/types/video";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
+
+const ADMIN_PIN_KEY = "mv_admin_pin";
+const DEFAULT_PIN = "74159";
+
+const getAdminPin = () => localStorage.getItem(ADMIN_PIN_KEY) || DEFAULT_PIN;
+const setAdminPin = (pin: string) => localStorage.setItem(ADMIN_PIN_KEY, pin);
 
 const AdminPanel = () => {
   const navigate = useNavigate();
@@ -16,7 +24,6 @@ const AdminPanel = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
 
-  // Upload form state
   const [name, setName] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState("");
@@ -24,29 +31,33 @@ const AdminPanel = () => {
   const [videoFileName, setVideoFileName] = useState("");
   const [playlist, setPlaylist] = useState("");
   const [category, setCategory] = useState("");
-  const [downloadPrice, setDownloadPrice] = useState("");
   const [watchPrice, setWatchPrice] = useState("");
-  const [downloadCode, setDownloadCode] = useState("");
   const [watchCode, setWatchCode] = useState("");
   const [newPlaylist, setNewPlaylist] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<{
     name: string; playlist: string; category: string;
-    watchPrice: string; watchCode: string; downloadPrice: string; downloadCode: string;
-  }>({ name: "", playlist: "", category: "", watchPrice: "", watchCode: "", downloadPrice: "", downloadCode: "" });
+    watchPrice: string; watchCode: string;
+  }>({ name: "", playlist: "", category: "", watchPrice: "", watchCode: "" });
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
-  // Ads form state
   const [adTitle, setAdTitle] = useState("");
   const [adSubtitle, setAdSubtitle] = useState("");
   const [adFile, setAdFile] = useState<File | null>(null);
   const [adPreview, setAdPreview] = useState("");
   const [adUploading, setAdUploading] = useState(false);
+
+  // Change PIN state
+  const [showChangePin, setShowChangePin] = useState(false);
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [showCurrentPin, setShowCurrentPin] = useState(false);
+  const [showNewPin, setShowNewPin] = useState(false);
 
   const loadData = async () => {
     try {
@@ -75,9 +86,9 @@ const AdminPanel = () => {
       const videoUrl = await store.uploadFileWithProgress("videos", videoPath, videoFile, (p) => setUploadProgress(p));
       let coverImageUrl = "";
       if (coverFile) { const cp = `${Date.now()}-${coverFile.name}`; coverImageUrl = await store.uploadFile("covers", cp, coverFile); }
-      await store.addVideo({ name: name.trim(), coverImage: coverImageUrl, videoUrl, playlist, category: category.trim(), downloadPrice: downloadPrice || "0", watchPrice: watchPrice || "0", downloadCode: downloadCode.trim(), watchCode: watchCode.trim() });
+      await store.addVideo({ name: name.trim(), coverImage: coverImageUrl, videoUrl, playlist, category: category.trim(), downloadPrice: "0", watchPrice: watchPrice || "0", downloadCode: "", watchCode: watchCode.trim() });
       await loadData();
-      setName(""); setCoverFile(null); setCoverPreview(""); setVideoFile(null); setVideoFileName(""); setPlaylist(""); setCategory(""); setDownloadPrice(""); setWatchPrice(""); setDownloadCode(""); setWatchCode(""); setUploadProgress(0);
+      setName(""); setCoverFile(null); setCoverPreview(""); setVideoFile(null); setVideoFileName(""); setPlaylist(""); setCategory(""); setWatchPrice(""); setWatchCode(""); setUploadProgress(0);
       toast.success("Video uploaded!");
     } catch (e: any) { toast.error("Upload failed: " + (e.message || "Unknown error")); } finally { setUploading(false); }
   };
@@ -88,7 +99,7 @@ const AdminPanel = () => {
 
   const startEdit = (v: Video) => {
     setEditingId(v.id);
-    setEditData({ name: v.name, playlist: v.playlist, category: v.category, watchPrice: v.watchPrice, watchCode: v.watchCode, downloadPrice: v.downloadPrice, downloadCode: v.downloadCode });
+    setEditData({ name: v.name, playlist: v.playlist, category: v.category, watchPrice: v.watchPrice, watchCode: v.watchCode });
     setEditCoverFile(null);
   };
 
@@ -101,7 +112,7 @@ const AdminPanel = () => {
         const cp = `${Date.now()}-${editCoverFile.name}`;
         coverImage = await store.uploadFile("covers", cp, editCoverFile);
       }
-      await store.updateVideo(editingId, { ...editData, coverImage });
+      await store.updateVideo(editingId, { ...editData, downloadPrice: "0", downloadCode: "", coverImage });
       await loadData();
       setEditingId(null);
       toast.success("Video updated!");
@@ -142,11 +153,35 @@ const AdminPanel = () => {
     try { await store.deleteAd(id); await loadData(); toast.success("Ad deleted"); } catch { toast.error("Failed to delete ad"); }
   };
 
+  const handleChangePin = () => {
+    if (currentPin !== getAdminPin()) {
+      toast.error("Current PIN is incorrect");
+      return;
+    }
+    if (newPin.length < 4) {
+      toast.error("PIN must be at least 4 characters");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      toast.error("PINs do not match");
+      return;
+    }
+    setAdminPin(newPin);
+    toast.success("PIN changed successfully!");
+    setShowChangePin(false);
+    setCurrentPin(""); setNewPin(""); setConfirmPin("");
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 flex items-center gap-3 px-4 py-3 bg-card border-b border-border">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/")}><ArrowLeft className="h-5 w-5" /></Button>
-        <h1 className="text-lg font-bold text-primary">Admin Panel</h1>
+      <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 bg-card border-b border-border">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")}><ArrowLeft className="h-5 w-5" /></Button>
+          <h1 className="text-lg font-bold text-primary">Admin Panel</h1>
+        </div>
+        <Button variant="ghost" size="icon" onClick={() => setShowChangePin(true)}>
+          <Lock className="h-5 w-5" />
+        </Button>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6">
@@ -181,10 +216,6 @@ const AdminPanel = () => {
                 <Input placeholder="Watch Price" value={watchPrice} onChange={(e) => setWatchPrice(e.target.value)} />
                 <Input placeholder="Watch Code" value={watchCode} onChange={(e) => setWatchCode(e.target.value)} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="Download Price" value={downloadPrice} onChange={(e) => setDownloadPrice(e.target.value)} />
-                <Input placeholder="Download Code" value={downloadCode} onChange={(e) => setDownloadCode(e.target.value)} />
-              </div>
               {uploading && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
@@ -214,10 +245,6 @@ const AdminPanel = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <Input placeholder="Watch Price" value={editData.watchPrice} onChange={(e) => setEditData({ ...editData, watchPrice: e.target.value })} />
                         <Input placeholder="Watch Code" value={editData.watchCode} onChange={(e) => setEditData({ ...editData, watchCode: e.target.value })} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input placeholder="Download Price" value={editData.downloadPrice} onChange={(e) => setEditData({ ...editData, downloadPrice: e.target.value })} />
-                        <Input placeholder="Download Code" value={editData.downloadCode} onChange={(e) => setEditData({ ...editData, downloadCode: e.target.value })} />
                       </div>
                       <div>
                         <label className="text-sm text-muted-foreground">Replace Cover Image (optional)</label>
@@ -319,6 +346,48 @@ const AdminPanel = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Change PIN Dialog */}
+      <Dialog open={showChangePin} onOpenChange={setShowChangePin}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Change Admin PIN</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Input
+                type={showCurrentPin ? "text" : "password"}
+                placeholder="Current PIN"
+                value={currentPin}
+                onChange={(e) => setCurrentPin(e.target.value)}
+                className="pr-10"
+              />
+              <button type="button" onClick={() => setShowCurrentPin(!showCurrentPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {showCurrentPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="relative">
+              <Input
+                type={showNewPin ? "text" : "password"}
+                placeholder="New PIN"
+                value={newPin}
+                onChange={(e) => setNewPin(e.target.value)}
+                className="pr-10"
+              />
+              <button type="button" onClick={() => setShowNewPin(!showNewPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {showNewPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <Input
+              type="password"
+              placeholder="Confirm New PIN"
+              value={confirmPin}
+              onChange={(e) => setConfirmPin(e.target.value)}
+            />
+            <Button className="w-full" onClick={handleChangePin}>Change PIN</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

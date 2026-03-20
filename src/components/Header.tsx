@@ -6,6 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+const ADMIN_PIN_KEY = "mv_admin_pin";
+const DEFAULT_PIN = "74159";
+const getAdminPin = () => localStorage.getItem(ADMIN_PIN_KEY) || DEFAULT_PIN;
+
 const Header = () => {
   const [clickCount, setClickCount] = useState(0);
   const [showPinDialog, setShowPinDialog] = useState(false);
@@ -24,7 +28,7 @@ const Header = () => {
   };
 
   const handlePinSubmit = () => {
-    if (pin === "74159") {
+    if (pin === getAdminPin()) {
       setShowPinDialog(false);
       setPin("");
       setPinError(false);

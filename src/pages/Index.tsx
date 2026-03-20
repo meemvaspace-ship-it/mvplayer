@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +17,7 @@ import { toast } from "sonner";
 
 const Index = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [filterPlaylist, setFilterPlaylist] = useState("all");
   const [videos, setVideos] = useState<Video[]>([]);
@@ -72,14 +74,19 @@ const Index = () => {
   }, [videos, favorites]);
 
   const handleWatch = (video: Video) => {
+    if (!user) {
+      toast.error("Please sign in to watch videos");
+      navigate("/login");
+      return;
+    }
     setSelectedVideo(video);
     setShowCode(true);
   };
 
   const handleCodeSuccess = async () => {
     if (selectedVideo) {
+      setShowCode(false);
       setShowPlayer(true);
-      // Record watch history
       if (user) {
         try {
           await store.addWatchHistory(user.id, selectedVideo.id, selectedVideo.name);
@@ -98,6 +105,7 @@ const Index = () => {
   const handleToggleFavorite = async (video: Video) => {
     if (!user) {
       toast.error("Please sign in to add favorites");
+      navigate("/login");
       return;
     }
     try {
@@ -130,23 +138,6 @@ const Index = () => {
   const renderHome = () => (
     <>
       <AdsCarousel ads={ads} />
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search videos..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-        </div>
-        <Select value={filterPlaylist} onValueChange={setFilterPlaylist}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="All Playlists" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Playlists</SelectItem>
-            {playlists.map((p) => (
-              <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
       {filtered.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-muted-foreground">No videos found</p>
@@ -166,7 +157,6 @@ const Index = () => {
             ← Back to categories
           </button>
           <h2 className="text-lg font-bold text-foreground mb-4">{selectedCategory}</h2>
-          {/* Show playlists in this category */}
           {(() => {
             const playlistsInCategory = new Set<string>();
             videos.forEach((v) => {
@@ -187,7 +177,6 @@ const Index = () => {
                     </div>
                   );
                 })}
-                {/* Videos without playlist */}
                 {(() => {
                   const noPlaylist = categoryVideos.filter((v) => !v.playlist);
                   if (noPlaylist.length === 0) return null;
@@ -234,7 +223,18 @@ const Index = () => {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Search videos..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" autoFocus />
       </div>
-      {search ? renderVideoGrid(filtered) : (
+      <Select value={filterPlaylist} onValueChange={setFilterPlaylist}>
+        <SelectTrigger className="w-full mb-4">
+          <SelectValue placeholder="All Playlists" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Playlists</SelectItem>
+          {playlists.map((p) => (
+            <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {search || filterPlaylist !== "all" ? renderVideoGrid(filtered) : (
         <p className="text-center text-muted-foreground py-8">Type to search videos...</p>
       )}
     </div>
@@ -254,12 +254,22 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background pb-16 sm:pb-0">
       <Header />
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        {activeTab === "home" && renderHome()}
-        {activeTab === "category" && renderCategory()}
-        {activeTab === "search" && renderSearch()}
-        {activeTab === "favorite" && renderFavorite()}
-      </main>
+      <div className="flex">
+        {/* Desktop Sidebar */}
+        <aside className="hidden sm:flex flex-col w-56 min-h-[calc(100vh-3.5rem)] border-r border-border bg-card p-4 gap-2 sticky top-14">
+          <SidebarTab active={activeTab === "home"} onClick={() => setActiveTab("home")} label="Home" />
+          <SidebarTab active={activeTab === "category"} onClick={() => setActiveTab("category")} label="Category" />
+          <SidebarTab active={activeTab === "search"} onClick={() => setActiveTab("search")} label="Search" />
+          <SidebarTab active={activeTab === "favorite"} onClick={() => setActiveTab("favorite")} label="Favorite" />
+        </aside>
+
+        <main className="flex-1 max-w-6xl mx-auto px-4 py-6">
+          {activeTab === "home" && renderHome()}
+          {activeTab === "category" && renderCategory()}
+          {activeTab === "search" && renderSearch()}
+          {activeTab === "favorite" && renderFavorite()}
+        </main>
+      </div>
 
       <BottomNav active={activeTab} onChange={setActiveTab} />
 
@@ -280,11 +290,22 @@ const Index = () => {
 
       <VideoPlayer
         open={showPlayer}
-        onOpenChange={setShowPlayer}
+        onOpenChange={(o) => { setShowPlayer(o); if (!o) setSelectedVideo(null); }}
         video={selectedVideo}
       />
     </div>
   );
 };
+
+const SidebarTab = ({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) => (
+  <button
+    onClick={onClick}
+    className={`text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+      active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+    }`}
+  >
+    {label}
+  </button>
+);
 
 export default Index;
