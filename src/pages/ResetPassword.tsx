@@ -1,0 +1,116 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
+import logo from "@/assets/mv-player-logo.png";
+
+const ResetPassword = () => {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isRecovery, setIsRecovery] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes("type=recovery")) {
+      setIsRecovery(true);
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecovery(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      toast.success("Password reset successfully!");
+      navigate("/");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reset password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isRecovery) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="text-center space-y-4">
+          <img src={logo} alt="MV Player" className="h-16 w-16 mx-auto" />
+          <h1 className="text-xl font-bold text-foreground">Invalid Reset Link</h1>
+          <p className="text-sm text-muted-foreground">This link is invalid or has expired.</p>
+          <Button onClick={() => navigate("/login")}>Back to Login</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="w-full max-w-sm space-y-6">
+        <div className="flex flex-col items-center gap-3">
+          <img src={logo} alt="MV Player" className="h-16 w-16" />
+          <h1 className="text-2xl font-bold text-primary">Reset Password</h1>
+          <p className="text-sm text-muted-foreground">Enter your new password</p>
+        </div>
+        <form onSubmit={handleReset} className="space-y-4">
+          <div className="relative">
+            <Input
+              type={showPassword ? "text" : "password"}
+              placeholder="New Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="pr-10"
+            />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <div className="relative">
+            <Input
+              type={showConfirm ? "text" : "password"}
+              placeholder="Confirm New Password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+              className="pr-10"
+            />
+            <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Resetting..." : "Reset Password"}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default ResetPassword;

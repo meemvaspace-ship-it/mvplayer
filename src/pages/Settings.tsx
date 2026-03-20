@@ -171,6 +171,18 @@ const Settings = () => {
           <div className="space-y-4">
             <div className="relative">
               <Input
+                type={showCurrent ? "text" : "password"}
+                placeholder="Current Password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="pr-10"
+              />
+              <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="relative">
+              <Input
                 type={showNew ? "text" : "password"}
                 placeholder="New Password"
                 value={newPassword}

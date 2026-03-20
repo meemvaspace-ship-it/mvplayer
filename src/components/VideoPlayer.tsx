@@ -21,7 +21,10 @@ const VideoPlayer = ({ open, onOpenChange, video }: Props) => {
             src={video.videoUrl}
             controls
             autoPlay
+            preload="auto"
+            playsInline
             className="w-full h-full"
+            onError={(e) => console.error("Video load error:", e)}
           />
         </div>
       </DialogContent>
