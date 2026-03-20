@@ -12,6 +12,7 @@ import AdminPanel from "./pages/AdminPanel";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import History from "./pages/History";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
