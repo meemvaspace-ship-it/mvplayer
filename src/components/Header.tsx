@@ -5,12 +5,15 @@ import logo from "@/assets/mv-player-logo.png";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ADMIN_PIN_KEY = "mv_admin_pin";
 const DEFAULT_PIN = "74159";
 const getAdminPin = () => localStorage.getItem(ADMIN_PIN_KEY) || DEFAULT_PIN;
 
 const Header = () => {
+  const { user } = useAuth();
   const [clickCount, setClickCount] = useState(0);
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [pin, setPin] = useState("");
@@ -20,7 +23,12 @@ const Header = () => {
   const handleLogoClick = () => {
     const next = clickCount + 1;
     if (next >= 11) {
-      setShowPinDialog(true);
+      if (!user) {
+        toast.error("Please sign in first to access the admin panel");
+        navigate("/login?redirect=/admin");
+      } else {
+        setShowPinDialog(true);
+      }
       setClickCount(0);
     } else {
       setClickCount(next);

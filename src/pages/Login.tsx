@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,9 +18,20 @@ const Login = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const redirectTo = searchParams.get("redirect") || "/";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim()) {
+      toast.error("Please enter your email");
+      return;
+    }
+    if (isSignUp && (!firstName.trim() || !lastName.trim())) {
+      toast.error("Please enter your first name and last name");
+      return;
+    }
     if (isSignUp && password !== confirmPassword) {
       toast.error("Passwords do not match");
       return;
@@ -31,23 +42,32 @@ const Login = () => {
     }
     setLoading(true);
     try {
+      const normalizedEmail = email.trim().toLowerCase();
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
-          email,
+        const { data, error } = await supabase.auth.signUp({
+          email: normalizedEmail,
           password,
           options: {
             data: { full_name: `${firstName.trim()} ${lastName.trim()}`, first_name: firstName.trim(), last_name: lastName.trim() },
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: `${window.location.origin}/login`,
           },
         });
         if (error) throw error;
-        toast.success("Account created! You can now sign in.");
-        navigate("/");
+
+        if (data.session) {
+          toast.success("Account created successfully!");
+          navigate(redirectTo);
+        } else {
+          toast.success("Account created. Please check your email to confirm your account.");
+          setIsSignUp(false);
+          setPassword("");
+          setConfirmPassword("");
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
         if (error) throw error;
         toast.success("Welcome back!");
-        navigate("/");
+        navigate(redirectTo);
       }
     } catch (err: any) {
       toast.error(err.message || "Authentication failed");
@@ -140,17 +160,9 @@ const Login = () => {
               type="button"
               onClick={async () => {
                 if (!email.trim()) {
-                  toast.error("Please enter your email first");
-                  return;
-                }
-                try {
-                  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/reset-password`,
-                  });
-                  if (error) throw error;
-                  toast.success("Password reset link sent to your email!");
-                } catch (err: any) {
-                  toast.error(err.message || "Failed to send reset link");
+                  navigate("/forgot-password");
+                } else {
+                  navigate(`/forgot-password?email=${encodeURIComponent(email.trim().toLowerCase())}`);
                 }
               }}
               className="text-sm text-primary hover:underline font-medium"

@@ -21,7 +21,6 @@ const CodeDialog = ({ open, onOpenChange, video, onSuccess, onBookCode }: Props)
       setCode("");
       setError(false);
       onSuccess();
-      onOpenChange(false);
     } else {
       setError(true);
     }
