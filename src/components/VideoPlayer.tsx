@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 import { Video } from "@/types/video";
+import { toast } from "sonner";
 
 interface Props {
   open: boolean;
@@ -10,10 +13,33 @@ interface Props {
 
 const VideoPlayer = ({ open, onOpenChange, video }: Props) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     setIsLoading(true);
   }, [video?.id, open]);
+
+  const handleDownload = async () => {
+    if (!video) return;
+    setDownloading(true);
+    try {
+      const response = await fetch(video.videoUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${video.name}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Download started!");
+    } catch {
+      toast.error("Failed to download video");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (!video) return null;
 
@@ -42,6 +68,18 @@ const VideoPlayer = ({ open, onOpenChange, video }: Props) => {
             onLoadedData={() => setIsLoading(false)}
             onError={(e) => console.error("Video load error:", e)}
           />
+        </div>
+        <div className="flex justify-end p-3 border-t border-border">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            {downloading ? "Downloading..." : "Download"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
