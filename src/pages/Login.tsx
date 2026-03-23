@@ -154,24 +154,6 @@ const Login = () => {
           </Button>
         </form>
 
-        {!isSignUp && (
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={async () => {
-                if (!email.trim()) {
-                  navigate("/forgot-password");
-                } else {
-                  navigate(`/forgot-password?email=${encodeURIComponent(email.trim().toLowerCase())}`);
-                }
-              }}
-              className="text-sm text-primary hover:underline font-medium"
-            >
-              Forgot Password?
-            </button>
-          </div>
-        )}
-
         <p className="text-center text-sm text-muted-foreground">
           {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
           <button
