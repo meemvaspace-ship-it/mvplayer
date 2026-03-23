@@ -275,7 +275,7 @@ const Index = () => {
 
       <CodeDialog
         open={showCode}
-        onOpenChange={(o) => { setShowCode(o); if (!o) setSelectedVideo(null); }}
+        onOpenChange={setShowCode}
         video={selectedVideo}
         onSuccess={handleCodeSuccess}
         onBookCode={handleBookCode}

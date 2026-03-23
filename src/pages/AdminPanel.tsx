@@ -10,6 +10,7 @@ import { store } from "@/store/appStore";
 import { Video, Playlist, Booking, Ad } from "@/types/video";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ADMIN_PIN_KEY = "mv_admin_pin";
 const DEFAULT_PIN = "74159";
@@ -19,6 +20,7 @@ const setAdminPin = (pin: string) => localStorage.setItem(ADMIN_PIN_KEY, pin);
 
 const AdminPanel = () => {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [videos, setVideos] = useState<Video[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -66,7 +68,11 @@ const AdminPanel = () => {
     } catch (e) { console.error("Failed to load admin data", e); }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
   const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,6 +85,11 @@ const AdminPanel = () => {
   };
 
   const handleUploadVideo = async () => {
+    if (!user) {
+      toast.error("Please sign in to upload videos");
+      navigate("/login?redirect=/admin");
+      return;
+    }
     if (!name.trim() || !videoFile) { toast.error("Name and video file are required"); return; }
     setUploading(true); setUploadProgress(0);
     try {
@@ -94,6 +105,11 @@ const AdminPanel = () => {
   };
 
   const handleDeleteVideo = async (id: string) => {
+    if (!user) {
+      toast.error("Please sign in to delete videos");
+      navigate("/login?redirect=/admin");
+      return;
+    }
     try { await store.deleteVideo(id); await loadData(); toast.success("Video deleted"); } catch { toast.error("Failed to delete video"); }
   };
 
@@ -105,6 +121,11 @@ const AdminPanel = () => {
 
   const handleSaveEdit = async () => {
     if (!editingId) return;
+    if (!user) {
+      toast.error("Please sign in to edit videos");
+      navigate("/login?redirect=/admin");
+      return;
+    }
     setEditSaving(true);
     try {
       let coverImage: string | undefined;
@@ -120,15 +141,30 @@ const AdminPanel = () => {
   };
 
   const handleAddPlaylist = async () => {
+    if (!user) {
+      toast.error("Please sign in to manage playlists");
+      navigate("/login?redirect=/admin");
+      return;
+    }
     if (!newPlaylist.trim()) return;
     try { await store.addPlaylist(newPlaylist.trim()); await loadData(); setNewPlaylist(""); toast.success("Playlist created"); } catch { toast.error("Failed to create playlist"); }
   };
 
   const handleDeletePlaylist = async (id: string) => {
+    if (!user) {
+      toast.error("Please sign in to manage playlists");
+      navigate("/login?redirect=/admin");
+      return;
+    }
     try { await store.deletePlaylist(id); await loadData(); toast.success("Playlist deleted"); } catch { toast.error("Failed to delete playlist"); }
   };
 
   const handleNotify = async (b: Booking) => {
+    if (!user) {
+      toast.error("Please sign in to manage bookings");
+      navigate("/login?redirect=/admin");
+      return;
+    }
     try { await store.markNotified(b.id); await loadData(); toast.success(`Marked as notified for ${b.email}`); } catch { toast.error("Failed to update booking"); }
   };
 
@@ -138,6 +174,11 @@ const AdminPanel = () => {
   };
 
   const handleCreateAd = async () => {
+    if (!user) {
+      toast.error("Please sign in to create ads");
+      navigate("/login?redirect=/admin");
+      return;
+    }
     if (!adTitle.trim() || !adFile) { toast.error("Title and image are required"); return; }
     setAdUploading(true);
     try {
@@ -150,8 +191,29 @@ const AdminPanel = () => {
   };
 
   const handleDeleteAd = async (id: string) => {
+    if (!user) {
+      toast.error("Please sign in to delete ads");
+      navigate("/login?redirect=/admin");
+      return;
+    }
     try { await store.deleteAd(id); await loadData(); toast.success("Ad deleted"); } catch { toast.error("Failed to delete ad"); }
   };
+
+  if (authLoading) {
+    return <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">Loading...</div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="w-full max-w-sm p-6 rounded-lg border border-border bg-card text-center space-y-4">
+          <h1 className="text-xl font-bold text-foreground">Admin access requires sign in</h1>
+          <p className="text-sm text-muted-foreground">Please sign in first, then enter your admin PIN.</p>
+          <Button className="w-full" onClick={() => navigate("/login?redirect=/admin")}>Go to Login</Button>
+        </div>
+      </div>
+    );
+  }
 
   const handleChangePin = () => {
     if (currentPin !== getAdminPin()) {

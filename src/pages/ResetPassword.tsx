@@ -17,9 +17,9 @@ const ResetPassword = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes("type=recovery")) {
+    if (sessionStorage.getItem("mv_recovery_verified") === "true") {
       setIsRecovery(true);
+      return;
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -45,8 +45,9 @@ const ResetPassword = () => {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+      sessionStorage.removeItem("mv_recovery_verified");
       toast.success("Password reset successfully!");
-      navigate("/");
+      navigate("/login");
     } catch (err: any) {
       toast.error(err.message || "Failed to reset password");
     } finally {

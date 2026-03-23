@@ -194,6 +194,15 @@ export const store = {
     const token = session?.access_token;
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+    if (!token) {
+      throw new Error("Please sign in again before uploading files");
+    }
+
+    const encodedPath = path
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.upload.addEventListener("progress", (e) => {
@@ -208,7 +217,7 @@ export const store = {
         }
       });
       xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-      xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${path}`);
+      xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`);
       xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       xhr.setRequestHeader("x-upsert", "true");
       xhr.send(file);
