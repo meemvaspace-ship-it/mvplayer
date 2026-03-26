@@ -95,14 +95,22 @@ const AdminPanel = () => {
     setUploading(true); setUploadProgress(0);
     try {
       const videoPath = `${Date.now()}-${videoFile.name}`;
-      const videoUrl = await store.uploadFileWithProgress("videos", videoPath, videoFile, (p) => setUploadProgress(p));
+      const { promise, abort } = store.uploadFileWithProgress("videos", videoPath, videoFile, (p) => setUploadProgress(p));
+      setUploadAbort(() => abort);
+      const videoUrl = await promise;
       let coverImageUrl = "";
       if (coverFile) { const cp = `${Date.now()}-${coverFile.name}`; coverImageUrl = await store.uploadFile("covers", cp, coverFile); }
       await store.addVideo({ name: name.trim(), coverImage: coverImageUrl, videoUrl, playlist, category: category.trim(), downloadPrice: "0", watchPrice: watchPrice || "0", downloadCode: "", watchCode: watchCode.trim() });
       await loadData();
       setName(""); setCoverFile(null); setCoverPreview(""); setVideoFile(null); setVideoFileName(""); setPlaylist(""); setCategory(""); setWatchPrice(""); setWatchCode(""); setUploadProgress(0);
       toast.success("Video uploaded!");
-    } catch (e: any) { toast.error("Upload failed: " + (e.message || "Unknown error")); } finally { setUploading(false); }
+    } catch (e: any) {
+      if (e.message === "Upload cancelled") {
+        toast.info("Upload cancelled");
+      } else {
+        toast.error("Upload failed: " + (e.message || "Unknown error"));
+      }
+    } finally { setUploading(false); setUploadAbort(null); }
   };
 
   const handleDeleteVideo = async (id: string) => {
