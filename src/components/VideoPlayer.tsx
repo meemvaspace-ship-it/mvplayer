@@ -101,7 +101,13 @@ const VideoPlayer = ({ open, onOpenChange, video }: Props) => {
             onError={(e) => console.error("Video load error:", e)}
           />
         </div>
-        <div className="flex justify-end p-3 border-t border-border">
+        <div className="flex items-center justify-end gap-3 p-3 border-t border-border">
+          {downloading && downloadProgress > 0 && (
+            <div className="flex items-center gap-2 flex-1">
+              <Progress value={downloadProgress} className="h-2 flex-1" />
+              <span className="text-xs text-muted-foreground font-medium min-w-[3ch]">{downloadProgress}%</span>
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -110,7 +116,7 @@ const VideoPlayer = ({ open, onOpenChange, video }: Props) => {
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            {downloading ? "Downloading..." : "Download"}
+            {downloading ? `Downloading...` : "Download"}
           </Button>
         </div>
       </DialogContent>
