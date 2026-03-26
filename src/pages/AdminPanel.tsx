@@ -38,6 +38,7 @@ const AdminPanel = () => {
   const [newPlaylist, setNewPlaylist] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadAbort, setUploadAbort] = useState<(() => void) | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<{
