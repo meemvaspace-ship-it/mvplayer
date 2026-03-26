@@ -187,87 +187,95 @@ export const store = {
     return data.publicUrl;
   },
 
-  uploadFileWithProgress: async (
+  uploadFileWithProgress: (
     bucket: string, path: string, file: File, onProgress: (percent: number) => void
-  ): Promise<string> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  ): { promise: Promise<string>; abort: () => void } => {
+    let abortFn: () => void = () => {};
 
-    if (!token) {
-      throw new Error("Please sign in again before uploading files");
-    }
+    const promise = (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
-    // Use TUS resumable upload for large files (>50MB), XHR for smaller ones
-    const CHUNK_THRESHOLD = 50 * 1024 * 1024; // 50MB
+      if (!token) {
+        throw new Error("Please sign in again before uploading files");
+      }
 
-    if (file.size > CHUNK_THRESHOLD) {
-      // TUS resumable upload
-      const { default: tus } = await import("tus-js-client");
-      return new Promise((resolve, reject) => {
-        const upload = new tus.Upload(file, {
-          endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
-          retryDelays: [0, 3000, 5000, 10000, 20000],
-          chunkSize: 6 * 1024 * 1024, // 6MB chunks
-          headers: {
-            authorization: `Bearer ${token}`,
-            "x-upsert": "true",
-          },
-          uploadDataDuringCreation: true,
-          removeFingerprintOnSuccess: true,
-          metadata: {
-            bucketName: bucket,
-            objectName: path,
-            contentType: file.type,
-            cacheControl: "3600",
-          },
-          onError: (error) => {
-            reject(new Error(`Upload failed: ${error.message}`));
-          },
-          onProgress: (bytesUploaded, bytesTotal) => {
-            onProgress(Math.round((bytesUploaded / bytesTotal) * 100));
-          },
-          onSuccess: () => {
+      const CHUNK_THRESHOLD = 50 * 1024 * 1024;
+
+      if (file.size > CHUNK_THRESHOLD) {
+        const { default: tus } = await import("tus-js-client");
+        return new Promise<string>((resolve, reject) => {
+          const upload = new tus.Upload(file, {
+            endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+            retryDelays: [0, 3000, 5000, 10000, 20000],
+            chunkSize: 6 * 1024 * 1024,
+            headers: {
+              authorization: `Bearer ${token}`,
+              "x-upsert": "true",
+            },
+            uploadDataDuringCreation: true,
+            removeFingerprintOnSuccess: true,
+            metadata: {
+              bucketName: bucket,
+              objectName: path,
+              contentType: file.type,
+              cacheControl: "3600",
+            },
+            onError: (error) => reject(new Error(`Upload failed: ${error.message}`)),
+            onProgress: (bytesUploaded, bytesTotal) => {
+              onProgress(Math.round((bytesUploaded / bytesTotal) * 100));
+            },
+            onSuccess: () => {
+              const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+              resolve(data.publicUrl);
+            },
+          });
+
+          abortFn = () => {
+            upload.abort(true);
+            reject(new Error("Upload cancelled"));
+          };
+
+          upload.findPreviousUploads().then((previousUploads) => {
+            if (previousUploads.length) {
+              upload.resumeFromPreviousUpload(previousUploads[0]);
+            }
+            upload.start();
+          });
+        });
+      }
+
+      const encodedPath = path
+        .split("/")
+        .map((segment) => encodeURIComponent(segment))
+        .join("/");
+
+      return new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        abortFn = () => {
+          xhr.abort();
+          reject(new Error("Upload cancelled"));
+        };
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+        });
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
             const { data } = supabase.storage.from(bucket).getPublicUrl(path);
             resolve(data.publicUrl);
-          },
-        });
-
-        // Check for previous uploads to resume
-        upload.findPreviousUploads().then((previousUploads) => {
-          if (previousUploads.length) {
-            upload.resumeFromPreviousUpload(previousUploads[0]);
+          } else {
+            reject(new Error(`Upload failed: ${xhr.statusText}`));
           }
-          upload.start();
         });
+        xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+        xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`);
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.setRequestHeader("x-upsert", "true");
+        xhr.send(file);
       });
-    }
+    })();
 
-    // Standard XHR upload for smaller files
-    const encodedPath = path
-      .split("/")
-      .map((segment) => encodeURIComponent(segment))
-      .join("/");
-
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
-      });
-      xhr.addEventListener("load", () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-          resolve(data.publicUrl);
-        } else {
-          reject(new Error(`Upload failed: ${xhr.statusText}`));
-        }
-      });
-      xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-      xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`);
-      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      xhr.setRequestHeader("x-upsert", "true");
-      xhr.send(file);
-    });
+    return { promise, abort: () => abortFn() };
   },
 };
