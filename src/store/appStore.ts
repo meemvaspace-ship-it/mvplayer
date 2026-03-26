@@ -193,11 +193,58 @@ export const store = {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID;
 
     if (!token) {
       throw new Error("Please sign in again before uploading files");
     }
 
+    // Use TUS resumable upload for large files (>50MB), XHR for smaller ones
+    const CHUNK_THRESHOLD = 50 * 1024 * 1024; // 50MB
+
+    if (file.size > CHUNK_THRESHOLD) {
+      // TUS resumable upload
+      const { default: tus } = await import("tus-js-client");
+      return new Promise((resolve, reject) => {
+        const upload = new tus.Upload(file, {
+          endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
+          retryDelays: [0, 3000, 5000, 10000, 20000],
+          chunkSize: 6 * 1024 * 1024, // 6MB chunks
+          headers: {
+            authorization: `Bearer ${token}`,
+            "x-upsert": "true",
+          },
+          uploadDataDuringCreation: true,
+          removeFingerprintOnSuccess: true,
+          metadata: {
+            bucketName: bucket,
+            objectName: path,
+            contentType: file.type,
+            cacheControl: "3600",
+          },
+          onError: (error) => {
+            reject(new Error(`Upload failed: ${error.message}`));
+          },
+          onProgress: (bytesUploaded, bytesTotal) => {
+            onProgress(Math.round((bytesUploaded / bytesTotal) * 100));
+          },
+          onSuccess: () => {
+            const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+            resolve(data.publicUrl);
+          },
+        });
+
+        // Check for previous uploads to resume
+        upload.findPreviousUploads().then((previousUploads) => {
+          if (previousUploads.length) {
+            upload.resumeFromPreviousUpload(previousUploads[0]);
+          }
+          upload.start();
+        });
+      });
+    }
+
+    // Standard XHR upload for smaller files
     const encodedPath = path
       .split("/")
       .map((segment) => encodeURIComponent(segment))
