@@ -294,6 +294,14 @@ const AdminPanel = () => {
                     <span className="font-semibold text-primary">{uploadProgress}%</span>
                   </div>
                   <Progress value={uploadProgress} className="h-3" />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={() => uploadAbort?.()}
+                  >
+                    <X className="h-4 w-4" /> Cancel Upload
+                  </Button>
                 </div>
               )}
               <Button onClick={handleUploadVideo} className="w-full gap-2" disabled={uploading}>
