@@ -55,7 +55,7 @@ const VideoPlayer = ({ open, onOpenChange, video }: Props) => {
         setDownloadProgress(Math.round((received / total) * 100));
       }
 
-      const blob = new Blob(chunks);
+      const blob = new Blob(chunks as BlobPart[]);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
